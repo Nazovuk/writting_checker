@@ -95,15 +95,45 @@ def _local_fallback(text: str) -> list[Issue]:
             )
         )
 
+    # Minimal EN subject-verb agreement fallback.
+    # Examples: "He go" -> "He goes", "She do" -> "She does", "It have" -> "It has".
+    en_sv_map = {
+        "go": "goes",
+        "do": "does",
+        "have": "has",
+        "say": "says",
+    }
+    for m in re.finditer(r"\b(he|she|it)\s+(go|do|have|say)\b", text, flags=re.IGNORECASE):
+        verb_start = m.start(2)
+        verb_end = m.end(2)
+        verb = m.group(2)
+        replacement = en_sv_map.get(verb.lower())
+        if replacement:
+            if verb[:1].isupper():
+                replacement = replacement[:1].upper() + replacement[1:]
+            issues.append(
+                Issue(
+                    id=str(uuid.uuid4()),
+                    start=verb_start,
+                    end=verb_end,
+                    original=text[verb_start:verb_end],
+                    replacements=[replacement],
+                    category="MORFOLOGY",
+                    severity="major",
+                    reason="Third-person singular subjects usually take a singular verb form.",
+                    ruleId="LOCAL_EN_SUBJECT_VERB",
+                )
+            )
+
     # Basic punctuation at end.
     if text and text[-1] not in ".!?":
         issues.append(
             Issue(
                 id=str(uuid.uuid4()),
-                start=len(text) - 1,
+                start=len(text),
                 end=len(text),
-                original=text[-1],
-                replacements=[text[-1] + "."],
+                original="",
+                replacements=["."],
                 category="PUNCTUATION",
                 severity="minor",
                 reason="Sentence likely needs ending punctuation.",
@@ -152,7 +182,7 @@ def apply_suggestions(text: str, issues: list[dict], issue_ids: list[str], strat
             continue
 
         start, end = int(issue["start"]), int(issue["end"])
-        if start < 0 or end > len(patched) or start >= end:
+        if start < 0 or end > len(patched) or start > end:
             skipped.append(issue["id"])
             continue
 

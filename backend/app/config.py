@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "Polyglot Writing Coach API"
     app_env: str = "dev"
 
-    languagetool_url: str = Field(default="http://localhost:8010/v2/check")
+    languagetool_url: str = Field(default="https://api.languagetool.org/v2/check")
     libretranslate_url: str = Field(default="http://localhost:5001/translate")
 
     max_text_length: int = 50000
