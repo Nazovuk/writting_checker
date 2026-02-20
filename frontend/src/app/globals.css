@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: #1c2428;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(224, 122, 79, 0.15), transparent 38%),
+    radial-gradient(circle at 90% 100%, rgba(42, 157, 143, 0.15), transparent 35%),
+    #f7f4ef;
+}
+
+.card {
+  @apply bg-panel rounded-2xl shadow-soft border border-black/5;
+}
+
+.issue-critical {
+  background: linear-gradient(transparent 62%, rgba(209, 73, 91, 0.35) 62%);
+}
+
+.issue-major {
+  background: linear-gradient(transparent 62%, rgba(244, 162, 97, 0.4) 62%);
+}
+
+.issue-minor {
+  background: linear-gradient(transparent 62%, rgba(42, 157, 143, 0.35) 62%);
+}

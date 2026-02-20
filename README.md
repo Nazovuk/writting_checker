@@ -1,0 +1,39 @@
+# Polyglot Writing Coach MVP
+
+Monorepo structure:
+
+- `/frontend`: Next.js responsive web UI
+- `/backend`: FastAPI stateless API
+- `/infra`: optional local docker dependencies
+
+## Quickstart
+
+1. Backend
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
+
+2. Optional NLP services
+```bash
+docker compose -f infra/docker-compose.yml up -d
+```
+
+3. Frontend
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
+
+## Notes
+
+- No persistent storage is used in MVP.
+- If LanguageTool/LibreTranslate are not running, backend uses fallback behavior.
+- Input options: paste text, drag-and-drop file, open-anything file picker, and screenshot capture.
+- Supported ingestion in `/v1/analyze/file`: image formats, PDF, DOCX, and text-like files (txt/md/csv/rtf/json/xml/yaml).

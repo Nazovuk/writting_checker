@@ -1,0 +1,12 @@
+services:
+  languagetool:
+    image: silviof/docker-languagetool:latest
+    ports:
+      - "8010:8010"
+
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    ports:
+      - "5001:5000"
+    environment:
+      - LT_LOAD_ONLY=en,tr,bg
