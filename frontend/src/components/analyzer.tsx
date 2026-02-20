@@ -38,6 +38,8 @@ export function Analyzer() {
   const [autoTransliterateBg, setAutoTransliterateBg] = useState(false);
   const [bgTranslitMode, setBgTranslitMode] = useState<BgTransliterationMode>("phonetic");
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
+  const autoAnalyzeTimerRef = useRef<number | null>(null);
+  const lastAutoAnalyzedRef = useRef<string>("");
 
   const displayText = result?.extractedText ?? inputText;
   const activeIssue = useMemo(() => result?.issues.find((i) => i.id === activeIssueId), [result, activeIssueId]);
@@ -50,6 +52,7 @@ export function Analyzer() {
       const response = await analyzeText({ text: inputText, sourceLang, explanationLang, mode });
       setResult(response);
       setActiveIssueId(response.issues[0]?.id);
+      lastAutoAnalyzedRef.current = `${inputText}::${sourceLang}::${explanationLang}::${mode}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error");
     } finally {
@@ -62,9 +65,11 @@ export function Analyzer() {
     setError(null);
     try {
       const response = await analyzeFile(file, { sourceLang, explanationLang, mode });
-      setInputText(response.extractedText ?? "");
+      const nextText = response.extractedText ?? "";
+      setInputText(nextText);
       setResult(response);
       setActiveIssueId(response.issues[0]?.id);
+      lastAutoAnalyzedRef.current = `${nextText}::${sourceLang}::${explanationLang}::${mode}`;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unexpected error");
     } finally {
@@ -157,6 +162,21 @@ export function Analyzer() {
     setQuizWords((prev) => (prev.includes(word) ? prev : [word, ...prev].slice(0, 20)));
   }
 
+  function downloadLearningData() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      savedWords,
+      quizWords
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "polyglot-learning-data.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function insertAtCursor(value: string) {
     const el = textAreaRef.current;
     if (!el) return;
@@ -221,6 +241,52 @@ export function Analyzer() {
       setAutoTransliterateBg(false);
     }
   }, [sourceLang]);
+
+  useEffect(() => {
+    const rawSavedWords = localStorage.getItem("pwc_saved_words");
+    const rawQuizWords = localStorage.getItem("pwc_quiz_words");
+    if (rawSavedWords) {
+      try {
+        const parsed = JSON.parse(rawSavedWords);
+        if (Array.isArray(parsed)) setSavedWords(parsed.filter((v) => typeof v === "string").slice(0, 20));
+      } catch {}
+    }
+    if (rawQuizWords) {
+      try {
+        const parsed = JSON.parse(rawQuizWords);
+        if (Array.isArray(parsed)) setQuizWords(parsed.filter((v) => typeof v === "string").slice(0, 20));
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("pwc_saved_words", JSON.stringify(savedWords));
+  }, [savedWords]);
+
+  useEffect(() => {
+    localStorage.setItem("pwc_quiz_words", JSON.stringify(quizWords));
+  }, [quizWords]);
+
+  useEffect(() => {
+    if (!inputText.trim()) return;
+    if (loading) return;
+
+    const signature = `${inputText}::${sourceLang}::${explanationLang}::${mode}`;
+    if (signature === lastAutoAnalyzedRef.current) return;
+
+    if (autoAnalyzeTimerRef.current) {
+      window.clearTimeout(autoAnalyzeTimerRef.current);
+    }
+
+    autoAnalyzeTimerRef.current = window.setTimeout(() => {
+      lastAutoAnalyzedRef.current = signature;
+      void runTextAnalysis();
+    }, 900);
+
+    return () => {
+      if (autoAnalyzeTimerRef.current) window.clearTimeout(autoAnalyzeTimerRef.current);
+    };
+  }, [inputText, sourceLang, explanationLang, mode]);
 
   return (
     <div className="min-h-screen p-4 md:p-8">
@@ -413,6 +479,9 @@ export function Analyzer() {
                   ))}
                 </div>
               )}
+              <button type="button" onClick={downloadLearningData} className="mt-3 rounded-lg border border-black/15 px-2 py-1 text-xs">
+                Download learning data
+              </button>
             </div>
 
             <p className="text-xs uppercase tracking-wide text-black/45 mt-4">Quiz queue</p>

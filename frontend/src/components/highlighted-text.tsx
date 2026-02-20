@@ -23,13 +23,13 @@ export function HighlightedText({ text, issues, activeIssueId, onPickIssue }: Pr
     }
 
     const cls = issue.severity === "critical" ? "issue-critical" : issue.severity === "major" ? "issue-major" : "issue-minor";
-    const active = activeIssueId === issue.id ? "ring-2 ring-ink/35 rounded-sm" : "";
+    const active = activeIssueId === issue.id ? "ring-2 ring-ink/35 rounded-md -mx-[2px]" : "";
 
     chunks.push(
       <button
         key={issue.id}
         type="button"
-        className={`${cls} ${active} cursor-pointer`}
+        className={`${cls} ${active} cursor-pointer px-0.5 py-0.5 rounded-md`}
         onClick={() => onPickIssue?.(issue.id)}
         title={issue.reason}
       >

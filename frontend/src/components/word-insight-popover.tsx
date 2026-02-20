@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import { WordInsight } from "@/lib/word-insight";
+import { SupportedLang } from "@/lib/types";
 
 type Props = {
   insight: WordInsight;
+  textLang: SupportedLang;
+  insightLang: SupportedLang;
+  onChangeInsightLang: (lang: SupportedLang) => void;
   x: number;
   y: number;
   onClose: () => void;
@@ -14,7 +18,7 @@ type Props = {
 
 type Tab = "meaning" | "usage" | "grammar" | "examples";
 
-export function WordInsightPopover({ insight, x, y, onClose, onSaveWord, onAddToQuiz }: Props) {
+export function WordInsightPopover({ insight, textLang, insightLang, onChangeInsightLang, x, y, onClose, onSaveWord, onAddToQuiz }: Props) {
   const [tab, setTab] = useState<Tab>("meaning");
 
   return (
@@ -26,9 +30,21 @@ export function WordInsightPopover({ insight, x, y, onClose, onSaveWord, onAddTo
       >
         <div className="flex items-center justify-between gap-2">
           <p className="font-semibold text-base">{insight.token}</p>
-          <button type="button" onClick={onClose} className="text-xs text-black/55">Close</button>
+          <div className="flex items-center gap-2">
+            <select
+              value={insightLang}
+              onChange={(e) => onChangeInsightLang(e.target.value as SupportedLang)}
+              className="rounded-lg border border-black/15 bg-white px-2 py-1 text-[11px]"
+              title="Explanation language"
+            >
+              <option value="en">EN</option>
+              <option value="tr">TR</option>
+              <option value="bg">BG</option>
+            </select>
+            <button type="button" onClick={onClose} className="text-xs text-black/55">Close</button>
+          </div>
         </div>
-        <p className="text-xs text-black/50">Lemma: {insight.lemma}</p>
+        <p className="text-xs text-black/50">Lemma: {insight.lemma} · Text: {textLang.toUpperCase()}</p>
         <div className="mt-2 flex gap-2 text-xs">
           <span className="rounded-full bg-black/5 px-2 py-1">{insight.pos}</span>
           <span className="rounded-full bg-black/5 px-2 py-1">CEFR {insight.cefr}</span>

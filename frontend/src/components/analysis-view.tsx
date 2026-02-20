@@ -52,12 +52,13 @@ export function AnalysisView({ sourceText, result, activeIssueId, onPickIssue, o
         {mode === "corrected" ? <WordText text={corrected} lang={lang} onSaveWord={onSaveWord} onAddToQuiz={onAddToQuiz} /> : null}
 
         {mode === "side" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
+            <div className="hidden md:block absolute left-1/2 top-2 bottom-2 w-px bg-gradient-to-b from-transparent via-black/20 to-transparent" />
+            <div className={`rounded-xl p-2 transition ${result?.issues?.length ? "bg-[#fff8ef] border border-[#f1d8bf]" : ""}`}>
               <p className="text-xs uppercase tracking-wide text-black/45 mb-2">Original</p>
               <HighlightedText text={original} issues={result?.issues ?? []} activeIssueId={activeIssueId} onPickIssue={onPickIssue} />
             </div>
-            <div>
+            <div className="rounded-xl p-2 bg-[#f9fbfd] border border-black/5">
               <p className="text-xs uppercase tracking-wide text-black/45 mb-2">Corrected</p>
               <WordText text={corrected} lang={lang} onSaveWord={onSaveWord} onAddToQuiz={onAddToQuiz} />
             </div>

@@ -20,6 +20,7 @@ type PopState = {
 
 export function WordText({ text, lang, onSaveWord, onAddToQuiz }: Props) {
   const [pop, setPop] = useState<PopState>(null);
+  const [insightLang, setInsightLang] = useState<SupportedLang>("en");
 
   if (!text) {
     return <p className="text-sm text-black/45">No content to display.</p>;
@@ -52,7 +53,10 @@ export function WordText({ text, lang, onSaveWord, onAddToQuiz }: Props) {
       </p>
       {pop ? (
         <WordInsightPopover
-          insight={getWordInsight(pop.token, lang)}
+          insight={getWordInsight(pop.token, insightLang)}
+          textLang={lang}
+          insightLang={insightLang}
+          onChangeInsightLang={setInsightLang}
           x={pop.x}
           y={pop.y}
           onClose={() => setPop(null)}
