@@ -10,3 +10,5 @@ services:
     envVars:
       - key: PWC_APP_ENV
         value: prod
+      - key: PYTHON_VERSION
+        value: 3.11.11
