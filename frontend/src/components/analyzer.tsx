@@ -76,7 +76,11 @@ export function Analyzer() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const track = stream.getVideoTracks()[0];
-      const imageCapture = new ImageCapture(track);
+      const ImageCaptureCtor = (window as unknown as { ImageCapture?: new (t: MediaStreamTrack) => { grabFrame: () => Promise<ImageBitmap> } }).ImageCapture;
+      if (!ImageCaptureCtor) {
+        throw new Error("ImageCapture is not supported in this browser");
+      }
+      const imageCapture = new ImageCaptureCtor(track);
       const bitmap = await imageCapture.grabFrame();
       const canvas = document.createElement("canvas");
       canvas.width = bitmap.width;
