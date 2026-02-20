@@ -3,10 +3,6 @@ name: Render Backend Auto Deploy
 on:
   push:
     branches: ["main"]
-    paths:
-      - "backend/**"
-      - "render.yaml"
-      - ".github/workflows/render-backend-deploy.yml"
   workflow_dispatch:
 
 jobs:
