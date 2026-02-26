@@ -8,7 +8,9 @@ class Settings(BaseSettings):
     app_env: str = "dev"
 
     languagetool_url: str = Field(default="https://api.languagetool.org/v2/check")
-    libretranslate_url: str = Field(default="http://localhost:5001/translate")
+    require_languagetool: bool = True
+    libretranslate_url: str = Field(default="https://translate.argosopentech.com/translate")
+    dictionary_api_base: str = Field(default="https://api.dictionaryapi.dev/api/v2/entries/en")
 
     max_text_length: int = 50000
     max_file_size_bytes: int = 8 * 1024 * 1024

@@ -1,6 +1,7 @@
-import { AnalyzeResponse, SupportedLang } from "@/lib/types";
+import { AnalyzeResponse, SupportedLang, WordInsight } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const DEFAULT_TIMEOUT_MS = 15000;
 
 type AnalyzePayload = {
   text: string;
@@ -9,18 +10,48 @@ type AnalyzePayload = {
   mode: "strict" | "standard" | "fluency";
 };
 
+async function parseApiError(response: Response, fallback: string): Promise<never> {
+  const body = await response.json().catch(() => null);
+  if (body && typeof body.detail === "string") {
+    throw new Error(`${body.detail} (${response.status})`);
+  }
+  if (body && typeof body.detail === "object") {
+    throw new Error(`${fallback} (${response.status})`);
+  }
+  throw new Error(fallback);
+}
+
+async function fetchJson<T>(url: string, init: RequestInit, fallback: string, retries = 1): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      clearTimeout(timeout);
+      const isLast = attempt === retries;
+      if (!isLast) continue;
+      const reason = error instanceof DOMException && error.name === "AbortError"
+        ? "Request timed out."
+        : "Unable to reach backend service.";
+      throw new Error(`${reason} Check API connection (${API_BASE}) and ensure backend is running.`);
+    }
+    clearTimeout(timeout);
+    if (!response.ok) {
+      return parseApiError(response, `${fallback} (${response.status})`);
+    }
+    return (await response.json()) as T;
+  }
+  throw new Error(`Unexpected network error. Check API connection (${API_BASE}).`);
+}
+
 export async function analyzeText(payload: AnalyzePayload): Promise<AnalyzeResponse> {
-  const response = await fetch(`${API_BASE}/v1/analyze/text`, {
+  return fetchJson<AnalyzeResponse>(`${API_BASE}/v1/analyze/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    throw new Error(`Text analysis failed (${response.status})`);
-  }
-
-  return response.json();
+  }, "Text analysis failed");
 }
 
 export async function analyzeImage(file: File, options: Omit<AnalyzePayload, "text">): Promise<AnalyzeResponse> {
@@ -30,16 +61,10 @@ export async function analyzeImage(file: File, options: Omit<AnalyzePayload, "te
   form.append("explanationLang", options.explanationLang);
   form.append("mode", options.mode);
 
-  const response = await fetch(`${API_BASE}/v1/analyze/image`, {
+  return fetchJson<AnalyzeResponse>(`${API_BASE}/v1/analyze/image`, {
     method: "POST",
     body: form
-  });
-
-  if (!response.ok) {
-    throw new Error(`Image analysis failed (${response.status})`);
-  }
-
-  return response.json();
+  }, "Image analysis failed");
 }
 
 export async function analyzeFile(file: File, options: Omit<AnalyzePayload, "text">): Promise<AnalyzeResponse> {
@@ -49,31 +74,38 @@ export async function analyzeFile(file: File, options: Omit<AnalyzePayload, "tex
   form.append("explanationLang", options.explanationLang);
   form.append("mode", options.mode);
 
-  const response = await fetch(`${API_BASE}/v1/analyze/file`, {
+  return fetchJson<AnalyzeResponse>(`${API_BASE}/v1/analyze/file`, {
     method: "POST",
     body: form
-  });
-
-  if (!response.ok) {
-    throw new Error(`File analysis failed (${response.status})`);
-  }
-
-  return response.json();
+  }, "File analysis failed");
 }
 
 export async function applySuggestions(text: string, issueIds: string[], strategy: "safe" | "all", sessionId?: string) {
-  const response = await fetch(`${API_BASE}/v1/suggestions/apply`, {
+  return fetchJson<{ patchedText: string; applied: string[]; skipped: string[] }>(`${API_BASE}/v1/suggestions/apply`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(sessionId ? { "x-session-id": sessionId } : {})
     },
     body: JSON.stringify({ text, issueIds, strategy })
+  }, "Apply failed");
+}
+
+export async function fetchWordInsight(token: string, textLang: SupportedLang, explanationLang: SupportedLang): Promise<WordInsight> {
+  const params = new URLSearchParams({
+    token,
+    textLang,
+    explanationLang
   });
 
-  if (!response.ok) {
-    throw new Error(`Apply failed (${response.status})`);
-  }
+  return fetchJson<WordInsight>(`${API_BASE}/v1/insights/word?${params.toString()}`, {}, "Word insight failed");
+}
 
-  return response.json() as Promise<{ patchedText: string; applied: string[]; skipped: string[] }>;
+export async function checkBackendHealth(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE}/health`, { method: "GET" });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

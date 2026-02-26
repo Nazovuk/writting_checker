@@ -26,15 +26,36 @@ export type SessionSummary = {
   nextPractice: string;
 };
 
+export type RewriteSuggestion = {
+  label: string;
+  text: string;
+  confidence: "safe" | "medium" | "aggressive";
+};
+
 export type AnalyzeResponse = {
   detectedLang: SupportedLang;
   explanationLang: SupportedLang;
   sessionId: string;
   issues: Issue[];
   correctedTextPreview: string;
+  rewriteSuggestions: string[];
+  rewriteSuggestionsDetailed?: RewriteSuggestion[];
   learningCards: LearningCard[];
   sessionSummary: SessionSummary;
   warnings: string[];
   extractedText?: string;
   ocrConfidence?: number;
+};
+
+export type WordInsight = {
+  token: string;
+  lemma: string;
+  pos: "noun" | "verb" | "adjective" | "adverb" | "pronoun" | "other";
+  cefr: "A1" | "A2" | "B1" | "B2" | "C1";
+  explanationLang: SupportedLang;
+  translationStatus: "native" | "translated" | "fallback";
+  meaning: string;
+  usage: string;
+  grammar: string;
+  examples: string[];
 };

@@ -1,9 +1,11 @@
 "use client";
 
-import { MouseEvent, useState } from "react";
+import { MouseEvent, useEffect, useState } from "react";
 import { SupportedLang } from "@/lib/types";
-import { getWordInsight } from "@/lib/word-insight";
+import { normalizeLookupToken } from "@/lib/word-insight";
 import { WordInsightPopover } from "@/components/word-insight-popover";
+import { fetchWordInsight } from "@/lib/api";
+import { WordInsight } from "@/lib/types";
 
 type Props = {
   text: string;
@@ -15,23 +17,54 @@ type Props = {
 type PopState = {
   x: number;
   y: number;
-  token: string;
+  rawToken: string;
+  lookupToken: string;
 } | null;
 
 export function WordText({ text, lang, onSaveWord, onAddToQuiz }: Props) {
   const [pop, setPop] = useState<PopState>(null);
   const [insightLang, setInsightLang] = useState<SupportedLang>("en");
+  const [insight, setInsight] = useState<WordInsight | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightError, setInsightError] = useState<string | null>(null);
+
+  function handleWordClick(token: string, e: MouseEvent<HTMLButtonElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const lookupToken = normalizeLookupToken(token);
+    if (!lookupToken) return;
+    setPop({ x: rect.left, y: rect.bottom, rawToken: token, lookupToken });
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInsight() {
+      if (!pop) return;
+      setInsightLoading(true);
+      setInsightError(null);
+      try {
+        const data = await fetchWordInsight(pop.lookupToken, lang, insightLang);
+        if (!cancelled) setInsight(data);
+      } catch (e) {
+        if (!cancelled) {
+          setInsight(null);
+          setInsightError(e instanceof Error ? e.message : "Insight unavailable");
+        }
+      } finally {
+        if (!cancelled) setInsightLoading(false);
+      }
+    }
+    setInsight(null);
+    void loadInsight();
+    return () => {
+      cancelled = true;
+    };
+  }, [pop, lang, insightLang]);
 
   if (!text) {
     return <p className="text-sm text-black/45">No content to display.</p>;
   }
 
   const parts = text.split(/(\s+)/);
-
-  function handleWordClick(token: string, e: MouseEvent<HTMLButtonElement>) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setPop({ x: rect.left, y: rect.bottom, token });
-  }
 
   return (
     <>
@@ -53,7 +86,10 @@ export function WordText({ text, lang, onSaveWord, onAddToQuiz }: Props) {
       </p>
       {pop ? (
         <WordInsightPopover
-          insight={getWordInsight(pop.token, insightLang)}
+          insight={insight}
+          token={pop.lookupToken}
+          loading={insightLoading}
+          error={insightError}
           textLang={lang}
           insightLang={insightLang}
           onChangeInsightLang={setInsightLang}

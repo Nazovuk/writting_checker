@@ -46,12 +46,21 @@ class SessionSummary(BaseModel):
     nextPractice: str
 
 
+class RewriteSuggestion(BaseModel):
+    label: str
+    text: str
+    confidence: Literal["safe", "medium", "aggressive"]
+    confidenceReason: str
+
+
 class AnalyzeResponse(BaseModel):
     detectedLang: SupportedLang
     explanationLang: SupportedLang
     sessionId: str
     issues: list[Issue]
     correctedTextPreview: str
+    rewriteSuggestions: list[str] = []
+    rewriteSuggestionsDetailed: list[RewriteSuggestion] = []
     learningCards: list[LearningCard]
     sessionSummary: SessionSummary
     warnings: list[str] = []
@@ -84,3 +93,16 @@ class LanguageCapabilities(BaseModel):
 class LanguagesResponse(BaseModel):
     supported: dict[SupportedLang, LanguageCapabilities]
     defaults: dict[str, str]
+
+
+class WordInsightResponse(BaseModel):
+    token: str
+    lemma: str
+    pos: Literal["noun", "verb", "adjective", "adverb", "pronoun", "other"]
+    cefr: Literal["A1", "A2", "B1", "B2", "C1"]
+    explanationLang: SupportedLang
+    translationStatus: Literal["native", "translated", "fallback"]
+    meaning: str
+    usage: str
+    grammar: str
+    examples: list[str]

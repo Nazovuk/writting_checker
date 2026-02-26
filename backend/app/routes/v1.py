@@ -11,13 +11,15 @@ from app.models import (
     ApplySuggestionsResponse,
     LanguageCapabilities,
     LanguagesResponse,
+    WordInsightResponse,
 )
-from app.services.explanation_service import build_summary, issue_to_card
+from app.services.explanation_service import build_rewrite_suggestions, build_rewrite_suggestions_detailed, build_summary, issue_to_card
 from app.services.file_ingestion_service import extract_text_from_upload
-from app.services.grammar_service import analyze_grammar, apply_suggestions
+from app.services.grammar_service import LanguageToolUnavailableError, analyze_grammar, apply_suggestions, post_edit_text
 from app.services.language_service import detect_language
 from app.services.session_store import session_store
 from app.services.translation_service import translate_text
+from app.services.word_insight_service import build_word_insight
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -33,7 +35,10 @@ async def _build_response(text: str, source_lang: str, explanation_lang: str, mo
     detected_lang = detect_language(text, source_lang)
     target_explanation_lang = detected_lang if explanation_lang == "same" else explanation_lang
 
-    issues, warnings = await analyze_grammar(text, detected_lang, mode)
+    try:
+        issues, warnings = await analyze_grammar(text, detected_lang, mode)
+    except LanguageToolUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     translated_issues = []
     for issue in issues:
@@ -51,6 +56,7 @@ async def _build_response(text: str, source_lang: str, explanation_lang: str, mo
         issue_ids=[i["id"] for i in translated_issues],
         strategy="safe",
     )
+    preview = post_edit_text(preview, detected_lang)
 
     cards = [issue_to_card(issue) for issue in issues[:6]]
     summary = build_summary(issues, detected_lang)
@@ -68,6 +74,8 @@ async def _build_response(text: str, source_lang: str, explanation_lang: str, mo
         sessionId="",
         issues=translated_issues,
         correctedTextPreview=preview,
+        rewriteSuggestions=build_rewrite_suggestions(text, preview, issues, detected_lang),
+        rewriteSuggestionsDetailed=build_rewrite_suggestions_detailed(text, preview, issues, detected_lang),
         learningCards=cards,
         sessionSummary=summary,
         warnings=warnings,
@@ -99,6 +107,19 @@ async def analyze_text(body: AnalyzeTextRequest):
         mode=body.mode,
     )
     return payload
+
+
+@router.get("/insights/word", response_model=WordInsightResponse)
+async def word_insight(
+    token: str,
+    textLang: str = "en",
+    explanationLang: str = "en",
+):
+    clean_text_lang = textLang if textLang in {"en", "tr", "bg"} else "en"
+    clean_explanation_lang = explanationLang if explanationLang in {"en", "tr", "bg"} else "en"
+    if not token.strip():
+        raise HTTPException(status_code=400, detail="Token is required")
+    return await build_word_insight(token, clean_text_lang, clean_explanation_lang)
 
 
 @router.post("/analyze/image", response_model=AnalyzeImageResponse)
@@ -194,7 +215,10 @@ async def apply(
     if not issue_list:
         # Fallback path for stateless apply: re-run analysis quickly.
         detected_lang = detect_language(body.text, "auto")
-        detected_issues, _ = await analyze_grammar(body.text, detected_lang, "standard")
+        try:
+            detected_issues, _ = await analyze_grammar(body.text, detected_lang, "standard")
+        except LanguageToolUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         issue_list = [i.model_dump() for i in detected_issues]
 
     patched, applied_ids, skipped_ids = apply_suggestions(
@@ -203,6 +227,8 @@ async def apply(
         issue_ids=body.issueIds,
         strategy=body.strategy,
     )
+    detected_lang = detect_language(patched, "auto")
+    patched = post_edit_text(patched, detected_lang)
 
     return ApplySuggestionsResponse(
         patchedText=patched,
