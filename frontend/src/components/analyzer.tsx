@@ -49,6 +49,7 @@ const frameDays: Record<TimeFrame, number> = { "1A": 30, "3A": 90, "6A": 180, "1
 const currencyFormatter = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 const compactFormatter = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 2 });
 const percentFormatter = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1, signDisplay: "exceptZero" });
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 function fmtNumber(value: number | null | undefined, suffix = "") {
   if (typeof value !== "number" || !Number.isFinite(value)) return "Veri yok";
@@ -292,6 +293,8 @@ export function Analyzer() {
   const [error, setError] = useState<string | null>(null);
   const [reportSaved, setReportSaved] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [nextRefreshAt, setNextRefreshAt] = useState<number>(() => Date.now() + AUTO_REFRESH_MS);
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
 
   useEffect(() => {
     const raw = localStorage.getItem("stocklab_live_watchlist");
@@ -306,6 +309,22 @@ export function Analyzer() {
   useEffect(() => {
     localStorage.setItem("stocklab_live_watchlist", JSON.stringify(watchlist));
   }, [watchlist]);
+
+  useEffect(() => {
+    const refreshTimer = window.setInterval(() => {
+      setRefreshNonce((value) => value + 1);
+      setNextRefreshAt(Date.now() + AUTO_REFRESH_MS);
+    }, AUTO_REFRESH_MS);
+
+    const clockTimer = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.clearInterval(clockTimer);
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -338,11 +357,17 @@ export function Analyzer() {
     event.preventDefault();
     const next = symbolInput.trim().toUpperCase();
     if (!next) return;
+    setNextRefreshAt(Date.now() + AUTO_REFRESH_MS);
     if (next === activeSymbol) {
       setRefreshNonce((value) => value + 1);
     } else {
       setActiveSymbol(next);
     }
+  }
+
+  function refreshNow() {
+    setRefreshNonce((value) => value + 1);
+    setNextRefreshAt(Date.now() + AUTO_REFRESH_MS);
   }
 
   function addToWatchlist() {
@@ -391,6 +416,8 @@ export function Analyzer() {
   const generatedAt = stock ? new Date(stock.fetchedAt).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" }) : "";
   const latestBarAt = stock?.latestBarAt ? new Date(`${stock.latestBarAt}T12:00:00Z`).toLocaleDateString("tr-TR", { dateStyle: "medium" }) : "";
   const latestBarAgeDays = stock?.latestBarAt ? Math.floor((Date.now() - new Date(`${stock.latestBarAt}T12:00:00Z`).getTime()) / 86_400_000) : 0;
+  const nextRefreshSeconds = Math.max(0, Math.ceil((nextRefreshAt - nowTick) / 1000));
+  const nextRefreshLabel = `${Math.floor(nextRefreshSeconds / 60)}:${String(nextRefreshSeconds % 60).padStart(2, "0")}`;
 
   return (
     <main className="min-h-screen bg-[#0b1016] text-slate-100">
@@ -440,6 +467,10 @@ export function Analyzer() {
             <span className={latestBarAgeDays > 4 ? "rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 text-amber-300" : "rounded-full border border-slate-700 px-3 py-1"}>
               Son fiyat barı: {latestBarAt || "Bekleniyor"}{latestBarAgeDays > 4 ? " · sağlayıcı gecikmiş olabilir" : ""}
             </span>
+            <span className="rounded-full border border-blue-400/40 bg-blue-400/10 px-3 py-1 text-blue-300">Oto yenileme: {nextRefreshLabel}</span>
+            <button type="button" onClick={refreshNow} disabled={loading} className="rounded-full border border-slate-600 px-3 py-1 text-slate-200 hover:border-emerald-400 hover:text-emerald-300 disabled:opacity-50">
+              Şimdi yenile
+            </button>
             <span className="rounded-full border border-slate-700 px-3 py-1">Örnek semboller: NVDA, AAPL, TSLA, THYAO.IS, BTC-USD, ^GSPC</span>
           </div>
         </header>
