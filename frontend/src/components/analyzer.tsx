@@ -18,6 +18,7 @@ type Point = {
 type StockPayload = {
   source: string;
   fetchedAt: string;
+  latestBarAt: string | null;
   symbol: string;
   name: string;
   exchange: string;
@@ -188,9 +189,11 @@ function calcAnalysis(data: StockPayload, benchmark?: StockPayload, timeFrame: T
   const returns = getReturns(points);
   const first = points[0];
   const last = points.at(-1) ?? points[points.length - 1];
+  const previous = points.at(-2) ?? last;
   const ma20 = movingAverage(closes, 20).at(-1) ?? last.close;
   const ma50 = movingAverage(closes, 50).at(-1) ?? last.close;
   const change = first ? last.close / first.close - 1 : 0;
+  const dayChange = previous ? last.close / previous.close - 1 : 0;
   const dailyVol = stdDev(returns);
   const annualVol = dailyVol * Math.sqrt(252);
   const avgReturn = returns.length ? returns.reduce((sum, value) => sum + value, 0) / returns.length : 0;
@@ -233,7 +236,9 @@ function calcAnalysis(data: StockPayload, benchmark?: StockPayload, timeFrame: T
     closes,
     volumes,
     last,
+    previous,
     change,
+    dayChange,
     ma20,
     ma50,
     annualVol,
@@ -263,7 +268,10 @@ function calcAnalysis(data: StockPayload, benchmark?: StockPayload, timeFrame: T
 }
 
 async function fetchStock(symbol: string, range: TimeFrame, signal?: AbortSignal): Promise<StockPayload> {
-  const response = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}&range=${range}`, { signal });
+  const response = await fetch(`/api/stock?symbol=${encodeURIComponent(symbol)}&range=${range}&t=${Date.now()}`, {
+    cache: "no-store",
+    signal
+  });
   const payload = await response.json() as StockPayload | ApiError;
   if (!response.ok || "error" in payload) {
     throw new Error("error" in payload ? payload.error : "Canlı veri alınamadı.");
@@ -283,6 +291,7 @@ export function Analyzer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reportSaved, setReportSaved] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     const raw = localStorage.getItem("stocklab_live_watchlist");
@@ -321,7 +330,7 @@ export function Analyzer() {
     }
     void load();
     return () => controller.abort();
-  }, [activeSymbol, benchmarkInput, timeFrame]);
+  }, [activeSymbol, benchmarkInput, timeFrame, refreshNonce]);
 
   const analysis = useMemo(() => stock ? calcAnalysis(stock, benchmark ?? undefined, timeFrame, riskProfile) : null, [stock, benchmark, timeFrame, riskProfile]);
 
@@ -329,7 +338,11 @@ export function Analyzer() {
     event.preventDefault();
     const next = symbolInput.trim().toUpperCase();
     if (!next) return;
-    setActiveSymbol(next);
+    if (next === activeSymbol) {
+      setRefreshNonce((value) => value + 1);
+    } else {
+      setActiveSymbol(next);
+    }
   }
 
   function addToWatchlist() {
@@ -373,9 +386,11 @@ export function Analyzer() {
     window.setTimeout(() => setReportSaved(false), 2200);
   }
 
-  const positive = (analysis?.change ?? 0) >= 0;
+  const positive = (analysis?.dayChange ?? 0) >= 0;
   const currency = stock?.currency ?? "USD";
   const generatedAt = stock ? new Date(stock.fetchedAt).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" }) : "";
+  const latestBarAt = stock?.latestBarAt ? new Date(`${stock.latestBarAt}T12:00:00Z`).toLocaleDateString("tr-TR", { dateStyle: "medium" }) : "";
+  const latestBarAgeDays = stock?.latestBarAt ? Math.floor((Date.now() - new Date(`${stock.latestBarAt}T12:00:00Z`).getTime()) / 86_400_000) : 0;
 
   return (
     <main className="min-h-screen bg-[#0b1016] text-slate-100">
@@ -387,7 +402,7 @@ export function Analyzer() {
               <h1 className="mt-3 text-4xl font-black tracking-normal md:text-6xl">{stock?.name ?? activeSymbol} ({activeSymbol})</h1>
               <p className="mt-4 text-lg font-bold text-slate-400">
                 Fiyat: <span className="text-slate-100">{analysis ? fmtMoney(analysis.last.close, currency) : "Yükleniyor"}</span>
-                <span className={positive ? "ml-2 text-emerald-400" : "ml-2 text-rose-400"}>Gün: {stock?.quote.changePercent != null ? fmtPct(stock.quote.changePercent) : analysis ? fmtPct(analysis.change * 100) : "..."}</span>
+                <span className={positive ? "ml-2 text-emerald-400" : "ml-2 text-rose-400"}>Son bar değişimi: {stock?.quote.changePercent != null ? fmtPct(stock.quote.changePercent) : analysis ? fmtPct(analysis.dayChange * 100) : "..."}</span>
                 <span className="ml-2">{stock?.quote.marketCap ? `Şirket büyüklüğü: ${fmtCompact(stock.quote.marketCap, currency === "USD" ? "$" : "")}` : `Hacim: ${fmtCompact(stock?.quote.volume ?? analysis?.last.volume)}`}</span>
               </p>
             </div>
@@ -422,6 +437,9 @@ export function Analyzer() {
           <div className="mt-5 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-400">
             <span className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1 text-emerald-300">Kaynak: {stock?.source ?? "Yahoo Finance"}</span>
             <span className="rounded-full border border-slate-700 px-3 py-1">Son çekim: {generatedAt || "Bekleniyor"}</span>
+            <span className={latestBarAgeDays > 4 ? "rounded-full border border-amber-400/50 bg-amber-400/10 px-3 py-1 text-amber-300" : "rounded-full border border-slate-700 px-3 py-1"}>
+              Son fiyat barı: {latestBarAt || "Bekleniyor"}{latestBarAgeDays > 4 ? " · sağlayıcı gecikmiş olabilir" : ""}
+            </span>
             <span className="rounded-full border border-slate-700 px-3 py-1">Örnek semboller: NVDA, AAPL, TSLA, THYAO.IS, BTC-USD, ^GSPC</span>
           </div>
         </header>
@@ -444,8 +462,8 @@ export function Analyzer() {
             <section className="mt-8">
               <SectionTitle number="01" title="Anlık Tablo" />
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <MetricCard title="Canlı fiyat" value={fmtMoney(analysis.last.close, currency)} detail={`${stock.exchange || stock.market || "Piyasa"} · ${stock.symbol}`} tone={positive ? "green" : "red"} />
-                <MetricCard title={stock.quote.marketCap ? "Piyasa değeri" : "Canlı hacim"} value={stock.quote.marketCap ? fmtCompact(stock.quote.marketCap, currency === "USD" ? "$" : "") : fmtCompact(stock.quote.volume ?? analysis.last.volume)} detail={stock.quote.marketCap ? `Hacim ${fmtCompact(stock.quote.volume ?? analysis.last.volume)}` : "Quote alanı gelmezse chart hacmi kullanılır"} tone="blue" />
+                <MetricCard title="Son fiyat barı" value={fmtMoney(analysis.last.close, currency)} detail={`${latestBarAt || stock.symbol} · ${stock.exchange || stock.market || "Piyasa"}`} tone={positive ? "green" : "red"} />
+                <MetricCard title={stock.quote.marketCap ? "Piyasa değeri" : "Son bar hacmi"} value={stock.quote.marketCap ? fmtCompact(stock.quote.marketCap, currency === "USD" ? "$" : "") : fmtCompact(stock.quote.volume ?? analysis.last.volume)} detail={stock.quote.marketCap ? `Hacim ${fmtCompact(stock.quote.volume ?? analysis.last.volume)}` : "Quote alanı gelmezse chart hacmi kullanılır"} tone="blue" />
                 <MetricCard title="F/K ve EPS" value={`${fmtNumber(analysis.pe)}x`} detail={`EPS ${fmtNumber(stock.quote.eps)} · ileri EPS ${fmtNumber(stock.quote.epsForward)}`} tone="amber" />
                 <MetricCard title="Trend skoru" value={`${Math.round(analysis.trendScore)}/100`} detail={`RSI ${fmtNumber(analysis.rsiValue)} · SMA50 ${fmtMoney(analysis.ma50, currency)}`} tone={analysis.trendScore > 60 ? "green" : "amber"} />
                 <MetricCard title="Beklenen salınım" value={`±%${currencyFormatter.format(analysis.expectedMove)}`} detail={`${timeFrame} verisinden volatilite modeli`} tone="amber" />

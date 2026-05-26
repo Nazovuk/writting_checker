@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type YahooQuote = {
   symbol?: string;
   shortName?: string;
@@ -60,8 +63,8 @@ export async function GET(request: Request) {
 
   try {
     const [chartResponse, quoteResponse] = await Promise.all([
-      fetch(chartUrl, { next: { revalidate: 45 }, headers: { accept: "application/json" } }),
-      fetch(quoteUrl, { next: { revalidate: 45 }, headers: { accept: "application/json" } })
+      fetch(chartUrl, { cache: "no-store", headers: { accept: "application/json" } }),
+      fetch(quoteUrl, { cache: "no-store", headers: { accept: "application/json" } })
     ]);
 
     if (!chartResponse.ok) {
@@ -117,6 +120,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       source: "Yahoo Finance",
       fetchedAt: new Date().toISOString(),
+      latestBarAt: points.at(-1)?.date ?? null,
       symbol: rawSymbol,
       name: quote.longName ?? quote.shortName ?? String(meta.longName ?? rawSymbol),
       exchange: quote.exchange ?? String(meta.exchangeName ?? ""),
@@ -139,6 +143,10 @@ export async function GET(request: Request) {
         analystRating: quote.averageAnalystRating ?? null
       },
       points
+    }, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0"
+      }
     });
   } catch (error) {
     return NextResponse.json({
