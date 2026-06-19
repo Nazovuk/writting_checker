@@ -293,3 +293,30 @@ def test_rewrite_suggestions_detailed_confidence_labels():
     detailed = build_rewrite_suggestions_detailed(text, preview, [], "en")
     assert detailed
     assert all(item["confidence"] in {"safe", "medium", "aggressive"} for item in detailed)
+
+
+def test_regression_double_inflection_instead_of_stay():
+    text = "I am go to the party instead of stay at home."
+    issues = _local_fallback(text, "en")
+    assert any(i.ruleId == "LOCAL_EN_PROGRESSIVE" and "going" in i.replacements for i in issues)
+    assert any(i.ruleId == "LOCAL_EN_PREPOSITION_GERUND" and "staying" in i.replacements for i in issues)
+    
+    # Verify apply_suggestions resolves multiple edits properly without duplicating suffixes
+    patched, applied, skipped = apply_suggestions(
+        text, 
+        [i.model_dump() for i in issues], 
+        [i.id for i in issues], 
+        "aggressive"
+    )
+    assert patched == "I am going to the party instead of staying at home."
+    
+    # Verify rewrite suggestions detailed output
+    detailed = build_rewrite_suggestions_detailed(text, patched, issues, "en")
+    
+    # "I'm going" comes from the english_fluency_rewrite now
+    assert any("I'm going to the party instead of staying at home." in c["text"] for c in detailed)
+    assert any("I am going to the party instead of staying at home." in c["text"] for c in detailed)
+    
+    # Double check that 'goinging' does NOT occur
+    assert not any("goinging" in c["text"] for c in detailed)
+    assert not any("stayinging" in c["text"] for c in detailed)

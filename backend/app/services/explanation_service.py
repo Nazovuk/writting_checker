@@ -89,7 +89,7 @@ def _english_paragraph_coherence_pass(text: str) -> str:
         rewritten = re.sub(r"\bin the end we realize\b", "in the end we realized", rewritten, flags=re.IGNORECASE)
         rewritten = re.sub(r"\bafter that,\s+we decide\b", "After that, we decided", rewritten, flags=re.IGNORECASE)
         rewritten = re.sub(r"\bwhen we finally arrive\b", "when we finally arrived", rewritten, flags=re.IGNORECASE)
-        rewritten = re.sub(r"\bI am feeling exhausted\b", "I felt exhausted", rewritten, flags=re.IGNORECASE)
+        rewritten = re.sub(r"\b(I am|I'm) feeling exhausted\b", "I felt exhausted", rewritten, flags=re.IGNORECASE)
         rewritten = re.sub(r"\bwho are trying\b", "who were trying", rewritten, flags=re.IGNORECASE)
 
     rewritten = re.sub(r"\bthe mistakes we made today is showing me\b", "the mistakes we made today are showing me", rewritten, flags=re.IGNORECASE)
@@ -108,6 +108,7 @@ def _english_fluency_rewrite(text: str) -> str:
     rewritten = re.sub(r"\b([a-z][a-z'\-]*(?:\s+[a-z][a-z'\-]*){0,3}) and I\s+was\b", r"\1 and I were", rewritten, flags=re.IGNORECASE)
     rewritten = re.sub(r"\bpeoples\b", "people", rewritten, flags=re.IGNORECASE)
     rewritten = re.sub(r"\bpeople who is\b", "people who are", rewritten, flags=re.IGNORECASE)
+    rewritten = re.sub(r"\bI am\b", "I'm", rewritten, flags=re.IGNORECASE)
     rewritten = re.sub(r"\bdon't ([^.!?\n]{0,60}) no\b", r"don't \1 any", rewritten, flags=re.IGNORECASE)
     rewritten = re.sub(r"\byesterday,\s+i have gone\b", "Yesterday, I went", rewritten, flags=re.IGNORECASE)
     rewritten = re.sub(r"\byesterday,\s+we have gone\b", "Yesterday, we went", rewritten, flags=re.IGNORECASE)
@@ -232,14 +233,14 @@ def build_rewrite_suggestions_detailed(
     add_candidate("Minimal edit", safe_preview, "safe")
 
     if issues:
-        by_end = sorted(issues, key=lambda i: i.start, reverse=True)
-        aggressive = original_text
-        for issue in by_end:
-            if not issue.replacements:
-                continue
-            if issue.start < 0 or issue.end > len(aggressive) or issue.start > issue.end:
-                continue
-            aggressive = aggressive[:issue.start] + issue.replacements[0] + aggressive[issue.end:]
+        from app.services.grammar_service import apply_suggestions
+        issue_dicts = [i.model_dump() for i in issues]
+        aggressive, _, _ = apply_suggestions(
+            text=original_text,
+            issues=issue_dicts,
+            issue_ids=[i["id"] for i in issue_dicts],
+            strategy="aggressive"
+        )
         aggressive = _normalize_sentence_boundaries(aggressive)
         add_candidate("Natural", aggressive, "aggressive")
 

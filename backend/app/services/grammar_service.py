@@ -316,9 +316,10 @@ def _local_fallback(text: str, lang: str = "en") -> list[Issue]:
         "run": "running",
         "write": "writing",
         "study": "studying",
+        "stay": "staying",
     }
     if lang == "en":
-        for m in re.finditer(r"\b(i)\s+am\s+(go|eat|wait|run|write|study)\b", text, flags=re.IGNORECASE):
+        for m in re.finditer(r"\b(i)\s+am\s+(go|eat|wait|run|write|study|stay)\b", text, flags=re.IGNORECASE):
             verb_start = m.start(2)
             verb_end = m.end(2)
             verb = m.group(2).lower()
@@ -335,6 +336,26 @@ def _local_fallback(text: str, lang: str = "en") -> list[Issue]:
                         severity="major",
                         reason="After 'am', progressive form is often required in this context.",
                         ruleId="LOCAL_EN_PROGRESSIVE",
+                    )
+                )
+
+        for m in re.finditer(r"\binstead\s+of\s+(go|eat|wait|run|write|study|stay)\b", text, flags=re.IGNORECASE):
+            verb_start = m.start(1)
+            verb_end = m.end(1)
+            verb = m.group(1).lower()
+            replacement = progressive_map.get(verb)
+            if replacement:
+                issues.append(
+                    Issue(
+                        id=str(uuid.uuid4()),
+                        start=verb_start,
+                        end=verb_end,
+                        original=text[verb_start:verb_end],
+                        replacements=[replacement],
+                        category="MORPHOLOGY",
+                        severity="major",
+                        reason="Prepositions like 'of' are usually followed by a gerund (-ing form).",
+                        ruleId="LOCAL_EN_PREPOSITION_GERUND",
                     )
                 )
 
@@ -511,7 +532,7 @@ def _local_fallback(text: str, lang: str = "en") -> list[Issue]:
                     ruleId="LOCAL_EN_FINALLY_ARRIVED",
                 )
             )
-        for m in re.finditer(r"\bi am feeling exhausted\b", text, flags=re.IGNORECASE):
+        for m in re.finditer(r"\b(i am|i'm) feeling exhausted\b", text, flags=re.IGNORECASE):
             start, end = m.span()
             issues.append(
                 Issue(
@@ -864,7 +885,7 @@ def post_edit_english(text: str) -> str:
         flags=re.IGNORECASE,
     )
     edited = re.sub(r"\b[Ww]hen we finally arrive\b", "When we finally arrived", edited)
-    edited = re.sub(r"\bI am feeling exhausted\b", "I felt exhausted", edited, flags=re.IGNORECASE)
+    edited = re.sub(r"\b(I am|I'm) feeling exhausted\b", "I felt exhausted", edited, flags=re.IGNORECASE)
     edited = re.sub(
         r"\bthe mistakes we made today is showing me\b",
         "the mistakes we made today are showing me",
