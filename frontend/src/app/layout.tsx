@@ -3,8 +3,8 @@ import "./globals.css";
 import { PwaRegister } from "@/components/pwa-register";
 
 export const metadata: Metadata = {
-  title: "StockLab Pro",
-  description: "Advanced stock analysis dashboard with technical, risk and portfolio intelligence",
+  title: "Polyglot Writing Coach",
+  description: "Multilingual grammar checker and writing coach",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
