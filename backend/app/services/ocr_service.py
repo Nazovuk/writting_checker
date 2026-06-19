@@ -4,9 +4,10 @@ from io import BytesIO
 from PIL import Image, ImageOps
 try:
     import pytesseract
+    # Try to get version to see if the binary is actually available
+    pytesseract.get_tesseract_version()
 except Exception:  # pragma: no cover
     pytesseract = None
-
 
 async def extract_text_from_image(raw: bytes, lang: str) -> tuple[str, float, list[dict]]:
     if pytesseract is None:
